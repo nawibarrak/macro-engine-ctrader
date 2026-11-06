@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Local secrets - never commit OAuth credentials or tokens
+.env
+.env.*
+!.env.example
+
+# Local runtime output and backups
+backups/
+data/ctrader_cache/
+*.jsonl
+
+# JavaScript dependencies/build output
+node_modules/
+dist/
+
+# OS/editor files
+.DS_Store
+*.swp
+*.swo
