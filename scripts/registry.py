@@ -14,17 +14,17 @@ def S(id, label, group, freq, prov, unit="", lo=None, hi=None, crit=False, v=Fal
                 lo=lo, hi=hi, crit=crit, v=v, note=note)
 
 REGISTRY = [
- # --- Harga aset prioritas (tier cepat; yfinance, cadangan FRED bila ada)
- S("XAUUSD", "Emas (XAU/USD, futures GC)", "Harga", "harian", [("yf", "GC=F")], "USD/oz", 500, 6000, True),
+ # --- Harga aset prioritas (cTrader demo/live opt-in, lalu yfinance/FRED)
+ S("XAUUSD", "Emas (XAU/USD, futures GC)", "Harga", "harian", [("ctrader", "XAUUSD"), ("yf", "GC=F")], "USD/oz", 500, 6000, True),
  S("WTI", "Minyak mentah WTI", "Harga", "harian", [("yf", "CL=F"), ("fred", "DCOILWTICO")], "USD/bbl", -50, 250, True),
  S("SPX", "S&P 500", "Harga", "harian", [("yf", "^GSPC"), ("fred", "SP500")], "indeks", 500, 20000, True),
- S("USDJPY", "USD/JPY", "Harga", "harian", [("yf", "JPY=X"), ("fred", "DEXJPUS")], "JPY", 50, 250, True),
- S("EURUSD", "EUR/USD", "Harga", "harian", [("yf", "EURUSD=X"), ("fred", "DEXUSEU")], "USD", 0.6, 1.6, True),
+ S("USDJPY", "USD/JPY", "Harga", "harian", [("ctrader", "USDJPY"), ("yf", "JPY=X"), ("fred", "DEXJPUS")], "JPY", 50, 250, True),
+ S("EURUSD", "EUR/USD", "Harga", "harian", [("ctrader", "EURUSD"), ("yf", "EURUSD=X"), ("fred", "DEXUSEU")], "USD", 0.6, 1.6, True),
  S("DXY", "Indeks Dolar AS (DXY)", "Harga", "harian", [("yf", "DX-Y.NYB"), ("fred", "DTWEXBGS")], "indeks", 70, 140),
  S("BRENT", "Minyak mentah Brent (futures BZ)", "Harga", "harian", [("yf", "BZ=F"), ("fred", "DCOILBRENTEU")], "USD/bbl", 20, 250),
  S("COPPER", "Tembaga (futures HG)", "Harga", "harian", [("yf", "HG=F")], "USD/lb", 1, 10),
  S("NDX", "Nasdaq 100", "Harga", "harian", [("yf", "^NDX"), ("fred", "NASDAQ100")], "indeks", 2000, 60000),
- S("BTC", "Bitcoin", "Harga", "harian", [("yf", "BTC-USD"), ("fred", "CBBTCUSD")], "USD", 1000, 1000000),
+ S("BTC", "Bitcoin", "Harga", "harian", [("ctrader", "BTC"), ("yf", "BTC-USD"), ("fred", "CBBTCUSD")], "USD", 1000, 1000000),
  S("EEM", "Pasar berkembang (ETF EEM)", "Harga", "harian", [("yf", "EEM")], "USD", 10, 100),
  S("TLT", "Obligasi AS 20+ tahun (ETF TLT)", "Harga", "harian", [("yf", "TLT")], "USD", 30, 200),
  S("HYG", "Obligasi korporasi high-yield (ETF HYG)", "Harga", "harian", [("yf", "HYG")], "USD", 40, 120),

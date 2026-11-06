@@ -6,10 +6,19 @@
 - Provenance: tiap seri mencatat penyedia, ticker/id, waktu fetch, tanggal observasi terakhir.
 Pakai: python scripts/data_layer.py [--tier cepat|lambat|semua] [--force]"""
 import os, sys, json, math, argparse, datetime as dt
+import subprocess
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 from registry import REGISTRY, FREQ, LONG_YEARS
+from provider_registry import route_for
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(REPO, ".env"))
+except ImportError:
+    pass
+
+ROOT = os.path.join(REPO, "data")
 SER = os.path.join(ROOT, "series")
 KEEP = {"harian": 1300, "mingguan": 700, "bulanan": 240, "kuartalan": 100}
 JUMP_SIGMA = 8.0      # lompatan sehari > 8 simpangan baku perubahan historis -> ditahan dulu
@@ -34,6 +43,36 @@ def p_yf(tk, start):
     h = yf.Ticker(tk).history(start=start, auto_adjust=False)["Close"].dropna()
     return [[i.strftime("%Y-%m-%d"), round(float(v), 6)] for i, v in h.items()]
 
+def p_ctrader(series_id, start):
+    route = route_for(series_id)
+    if route is None:
+        raise RuntimeError(f"No cTrader route is configured for {series_id}")
+    errors = []
+    for symbol in route.ctrader_symbols:
+        command = [sys.executable, os.path.join(REPO, "scripts", "run_fetch.py"),
+                   "--history", "--symbols", symbol, "--start", start]
+        if os.environ.get("CTRADER_ALLOW_LIVE", "0").strip().lower() in ("1", "true", "yes", "on"):
+            command.append("--allow-live")
+        try:
+            result = subprocess.run(command, cwd=REPO, capture_output=True, text=True, timeout=100)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            errors.append(f"{symbol}: {type(exc).__name__}")
+            continue
+        if result.returncode:
+            detail = (result.stderr or result.stdout).strip().splitlines()
+            errors.append(f"{symbol}: {(detail[-1] if detail else 'request failed')[:120]}")
+            continue
+        marker = next((line[len("CTRADER_HISTORY_JSON="):] for line in result.stdout.splitlines()
+                       if line.startswith("CTRADER_HISTORY_JSON=")), None)
+        if marker is None:
+            errors.append(f"{symbol}: history response missing")
+            continue
+        points = json.loads(marker)
+        if len(points) >= 2:
+            return points
+        errors.append(f"{symbol}: fewer than two daily bars")
+    raise RuntimeError("; ".join(errors) or "No cTrader daily bars returned")
+
 def p_cftc(code, start):
     """Posisi bersih non-komersial (long - short), mingguan, laporan hari Selasa."""
     import requests
@@ -55,7 +94,14 @@ def p_llama(_ref, start):
         if day >= start: out.append([day, round(x["totalCirculatingUSD"]["peggedUSD"] / 1e9, 3)])
     return out
 
-PROVIDERS = {"fred": p_fred, "yf": p_yf, "cftc": p_cftc, "llama": p_llama}
+PROVIDERS = {"fred": p_fred, "yf": p_yf, "ctrader": p_ctrader, "cftc": p_cftc, "llama": p_llama}
+
+def provider_routes(s):
+    routes = s["prov"]
+    enabled = os.environ.get("CTRADER_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
+    if not enabled:
+        routes = [route for route in routes if route[0] != "ctrader"]
+    return routes
 
 # ---------- util ----------
 def load(sid):
@@ -95,10 +141,12 @@ def age_days(date_str):
 
 def due(s, old, force):
     if force or not old: return True
-    refs = [r for _, r in s["prov"]]
+    routes = provider_routes(s)
+    refs = [r for _, r in routes]
+    primary = routes[0]
+    if any(name == "ctrader" for name, _ in s["prov"]) and old.get("primary") != list(primary): return True
     if old.get("hist_years") != LONG_YEARS.get(s["id"]): return True            # kebutuhan riwayat berubah -> ambil ulang sekali
     if old.get("ref") not in refs: return True                       # definisi seri berubah -> ambil ulang
-    if bool(old.get("fallback")) != (old.get("ref") != s["prov"][0][1]) and old.get("prov") in dict(s["prov"]): return True   # urutan sumber utama berubah
     today = NOW().date().isoformat()
     if any(p[0] > today for p in old.get("points", [])[-5:]): return True   # cache lama berisi tanggal masa depan
     if old.get("state") in ("gagal", "ditahan") and (NOW() - dt.datetime.fromisoformat(old.get("tried", old["fetched"]))).total_seconds() > 600: return True
@@ -112,8 +160,10 @@ def process(s, force=False):
     if not due(s, old, force):
         return old, "lewati"
     start = (NOW().date() - dt.timedelta(days=365 * LONG_YEARS.get(s["id"], 4 if s["freq"] in ("harian", "mingguan") else 15))).isoformat()
+    routes = provider_routes(s)
+    primary = routes[0]
     errs = []; got = None; used = None; maxage = FREQ[s["freq"]][0]
-    for name, ref in s["prov"]:
+    for name, ref in routes:
         try:
             pts = PROVIDERS[name](ref, start)
             pts, bad = clean(pts, s)
@@ -142,9 +192,11 @@ def process(s, force=False):
                 return old, "ditahan"
             note = f"lompatan {z}σ pada data pertama, diterima dengan catatan"
     d = dict(id=s["id"], label=s["label"], group=s["group"], freq=s["freq"], unit=s["unit"],
-             prov=used[0], ref=used[1], fallback=(used[1] != s["prov"][0][1]), dropped=used[2],
+             prov=used[0], ref=used[1], fallback=(used[:2] != primary), dropped=used[2],
              fetched=now, asof=got[-1][0], last=got[-1][1], state=state, note=note, err=errs or None,
              hist_years=LONG_YEARS.get(s["id"]), points=got[-keep_n(s):])
+    if any(name == "ctrader" for name, _ in s["prov"]):
+        d["primary"] = list(primary)
     return d, "ok"
 
 def keep_n(s):

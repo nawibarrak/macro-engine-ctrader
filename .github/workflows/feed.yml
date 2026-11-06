@@ -1,0 +1,83 @@
+name: Refresh macro data and publish dashboard
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macro-data-and-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Run pipeline and build site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Require FRED API key
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          if [ -z "$FRED_API_KEY" ]; then
+            echo "::error::Add FRED_API_KEY in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Run macro data pipeline
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          CTRADER_CLIENT_ID: ${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET: ${{ secrets.CTRADER_CLIENT_SECRET }}
+          CTRADER_ACCESS_TOKEN: ${{ secrets.CTRADER_ACCESS_TOKEN }}
+          CTRADER_ACCOUNT_ID: ${{ secrets.CTRADER_ACCOUNT_ID }}
+          CTRADER_ENABLED: ${{ vars.CTRADER_ENABLED || '0' }}
+          CTRADER_HOST: ${{ vars.CTRADER_HOST || 'demo' }}
+          CTRADER_ALLOW_LIVE: ${{ vars.CTRADER_ALLOW_LIVE || '0' }}
+        run: python scripts/pipeline.py --fail-on-error
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        run: bun run build # runs TypeScript checks and vite build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
