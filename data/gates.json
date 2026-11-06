@@ -1,0 +1,175 @@
+{
+ "generated": "2026-10-07T06:31:36+00:00",
+ "umum": {
+  "open": false,
+  "blocked_by": [
+   {
+    "id": "US02Y",
+    "alasan": "status data belum tersedia"
+   },
+   {
+    "id": "US10Y",
+    "alasan": "status data belum tersedia"
+   },
+   {
+    "id": "FED",
+    "alasan": "status data belum tersedia"
+   },
+   {
+    "id": "VIX",
+    "alasan": "status data belum tersedia"
+   },
+   {
+    "id": "HYOAS",
+    "alasan": "status data belum tersedia"
+   }
+  ]
+ },
+ "aset": {
+  "XAUUSD": {
+   "open": false,
+   "blocked_by": [
+    {
+     "id": "US02Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "US10Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "FED",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "VIX",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "HYOAS",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "XAUUSD",
+     "alasan": "status data belum tersedia"
+    }
+   ]
+  },
+  "WTI": {
+   "open": false,
+   "blocked_by": [
+    {
+     "id": "US02Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "US10Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "FED",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "VIX",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "HYOAS",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "WTI",
+     "alasan": "status data belum tersedia"
+    }
+   ]
+  },
+  "SPX": {
+   "open": false,
+   "blocked_by": [
+    {
+     "id": "US02Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "US10Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "FED",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "VIX",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "HYOAS",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "SPX",
+     "alasan": "status data belum tersedia"
+    }
+   ]
+  },
+  "USDJPY": {
+   "open": false,
+   "blocked_by": [
+    {
+     "id": "US02Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "US10Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "FED",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "VIX",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "HYOAS",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "USDJPY",
+     "alasan": "status data belum tersedia"
+    }
+   ]
+  },
+  "EURUSD": {
+   "open": false,
+   "blocked_by": [
+    {
+     "id": "US02Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "US10Y",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "FED",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "VIX",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "HYOAS",
+     "alasan": "status data belum tersedia"
+    },
+    {
+     "id": "EURUSD",
+     "alasan": "status data belum tersedia"
+    }
+   ]
+  }
+ }
+}

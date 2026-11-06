@@ -1,0 +1,6 @@
+{
+  "name": "Macro Engine Desk",
+  "description": "Fundamental macroeconomic terminal and asset allocation desk tracking market data, capital flows, macro indicators, central bank policies, systemic stress, COT speculative positions, and fundamental BUY/SELL/HOLD decision signals.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

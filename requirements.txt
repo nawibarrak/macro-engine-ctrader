@@ -1,0 +1,7 @@
+requests
+numpy
+pandas
+yfinance
+ctrader-open-api
+twisted
+python-dotenv

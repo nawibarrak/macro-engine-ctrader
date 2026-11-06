@@ -1,0 +1,19 @@
+{
+ "generated": "2026-10-08T09:38:32+00:00",
+ "violations": [],
+ "notes": [
+  {
+   "rule": "K4",
+   "msg": "scripts/check_concept.py menyebut Kaggle/Colab (catatan dokumentasi, bukan kode)"
+  },
+  {
+   "rule": "K4",
+   "msg": "docs/PROGRESS.md menyebut Kaggle/Colab (catatan dokumentasi, bukan kode)"
+  },
+  {
+   "rule": "K4",
+   "msg": "docs/KONSEP.md menyebut Kaggle/Colab (catatan dokumentasi, bukan kode)"
+  }
+ ],
+ "series": 68
+}

@@ -1,0 +1,326 @@
+{
+ "versi": "fase-0.1",
+ "status": "kandidat",
+ "keterangan": "Semua ambang tahap 3. Status KANDIDAT: ditetapkan dari struktur pasar dan praktik umum, BELUM dikalibrasi dengan data asli. Ubah di sini, bukan di kode (K7).",
+ "fase": {
+  "masukan": {
+   "vol": {
+    "seri": "VIX",
+    "umur_maks_hari": 5
+   },
+   "term": {
+    "seri": "VIX3M",
+    "umur_maks_hari": 5
+   },
+   "kredit": {
+    "seri": "HYOAS",
+    "umur_maks_hari": 7
+   },
+   "kondisi": {
+    "seri": "NFCI",
+    "umur_maks_hari": 10
+   }
+  },
+  "urutan": [
+   "Normal",
+   "Waspada",
+   "Stres",
+   "Krisis"
+  ],
+  "persentil": {
+   "naik": 75,
+   "ekstrem": 90,
+   "sangat_ekstrem": 97
+  },
+  "jendela_obs": 2520,
+  "min_obs": 250,
+  "term_terbalik": 1.0,
+  "histeresis_turun_hari": 3,
+  "aturan": "Tingkat per dimensi (vol: VIX; kredit: HYOAS) dari persentil point-in-time 0..3. Normal = keduanya 0; Waspada = tepat satu dimensi naik; Stres = keduanya naik; Krisis = keduanya >=2 DAN kurva VIX terbalik (VIX/VIX3M > 1). Kurva terbalik mengangkat vol ke minimal 1. Naik langsung, turun satu tingkat setelah 3 hari mentah lebih rendah. NFCI hanya konteks.",
+  "peristiwa_uji": [
+   {
+    "nama": "Covid 2020",
+    "dari": "2020-03-09",
+    "sampai": "2020-04-01",
+    "min_fase": "Stres"
+   },
+   {
+    "nama": "SVB 2023",
+    "dari": "2023-03-10",
+    "sampai": "2023-03-20",
+    "min_fase": "Waspada"
+   },
+   {
+    "nama": "Tarif 2025",
+    "dari": "2025-04-03",
+    "sampai": "2025-04-10",
+    "min_fase": "Waspada"
+   },
+   {
+    "nama": "Tenang 2017",
+    "dari": "2017-06-01",
+    "sampai": "2017-08-01",
+    "maks_fase": "Normal"
+   }
+  ]
+ },
+ "otak": {
+  "status": "kandidat",
+  "kejutan": {
+   "paruh_umur_hari": 10,
+   "jendela_hari": 45,
+   "min_sd_obs": 4,
+   "netral_z": 0.25,
+   "klip_z": 3,
+   "bobot": {
+    "cpi_core": 3,
+    "pce_core": 3,
+    "cpi": 2,
+    "ppi": 1,
+    "ahe": 2,
+    "nfp": 3,
+    "unemp": 2.5,
+    "claims": 1.5,
+    "jolts": 1,
+    "retail": 1.5,
+    "ip": 1,
+    "empire": 0.75,
+    "philly": 0.75,
+    "gdp": 1.5
+   },
+   "arah": {
+    "cpi_core": 1,
+    "pce_core": 1,
+    "cpi": 1,
+    "ppi": 1,
+    "ahe": 1,
+    "nfp": 1,
+    "unemp": -1,
+    "claims": -1,
+    "jolts": 1,
+    "retail": 1,
+    "ip": 1,
+    "empire": 1,
+    "philly": 1,
+    "gdp": 1
+   }
+  },
+  "kondisi": {
+   "netral": 0.25
+  },
+  "fed": {
+   "r_star": 0.75,
+   "target_inflasi": 2.0,
+   "phi_inflasi": 0.5,
+   "phi_pengangguran": 1.0,
+   "lebar_target": 0.25,
+   "skala_celah_taylor": 1.5,
+   "skala_harga_2y": 0.75,
+   "bobot_kejutan": 0.5,
+   "bobot_taylor": 0.5,
+   "ambang_stance": 20,
+   "ambang_p_z": 0.5,
+   "ambang_selisih_pasar": 50
+  },
+  "faktor": {
+   "jendela_hari": 5,
+   "jendela_sd_obs": 750,
+   "min_obs": 120,
+   "klip_z": 3
+  },
+  "aset": {
+   "XAUUSD": {
+    "beta": "XAU",
+    "gerbang": "XAUUSD",
+    "cot": "COT_GOLD",
+    "aliran": {
+     "seri": "GLD",
+     "tanda": 1
+    }
+   },
+   "WTI": {
+    "beta": "WTI",
+    "gerbang": "WTI",
+    "cot": "COT_CRUDE",
+    "aliran": {
+     "seri": "WTI",
+     "tanda": 1
+    }
+   },
+   "SPX": {
+    "beta": "SPX",
+    "gerbang": "SPX",
+    "cot": "COT_SPX",
+    "aliran": {
+     "seri": "SPY",
+     "tanda": 1
+    }
+   },
+   "USDJPY": {
+    "beta": "USDJPY",
+    "gerbang": "USDJPY",
+    "cot": "COT_JPY",
+    "aliran": {
+     "seri": "DXY",
+     "tanda": 1
+    }
+   },
+   "EURUSD": {
+    "beta": "EURUSD",
+    "gerbang": "EURUSD",
+    "cot": "COT_EUR",
+    "aliran": {
+     "seri": "DXY",
+     "tanda": -1
+    }
+   }
+  },
+  "skor": {
+   "skala": 33,
+   "ambang_arah": 0.3
+  },
+  "keyakinan": {
+   "bobot": {
+    "kelengkapan": 0.25,
+    "kesepakatan_fed": 0.25,
+    "aliran_searah": 0.25,
+    "bukti_tautan": 0.25
+   },
+   "pengali_fase": {
+    "Normal": 1,
+    "Waspada": 0.85,
+    "Stres": 0.6,
+    "Krisis": 0.4
+   },
+   "beta_prior": 0.6
+  },
+  "aliran": {
+   "jendela_hari": 20,
+   "jendela_sd_obs": 750,
+   "ekstrem_z": 1.0,
+   "kelas": {
+    "Obligasi AS": "TLT",
+    "Saham AS": "SPY",
+    "Saham teknologi": "NDX",
+    "Kredit berisiko": "HYG",
+    "Emas": "GLD",
+    "Dolar": "DXY",
+    "Kripto": "BTC",
+    "Pasar berkembang": "EEM",
+    "Tembaga": "COPPER",
+    "Minyak": "WTI"
+   },
+   "berisiko": [
+    "SPY",
+    "NDX",
+    "HYG",
+    "EEM",
+    "BTC",
+    "COPPER"
+   ],
+   "aman": [
+    "TLT",
+    "GLD",
+    "DXY"
+   ]
+  },
+  "cot": {
+   "jendela_minggu": 156,
+   "min_obs": 52,
+   "ekstrem_atas": 90,
+   "ekstrem_bawah": 10
+  },
+  "tautan": {
+   "jendela_hari": 5,
+   "jendela_obs": 750,
+   "min_obs": 250,
+   "min_korelasi": 0.1,
+   "min_subjendela_searah": 3,
+   "subjendela": 4,
+   "daftar": [
+    {
+     "dari": "US02Y",
+     "ke": "DXY",
+     "tanda": 1,
+     "aset": [
+      "EURUSD",
+      "USDJPY",
+      "XAUUSD"
+     ]
+    },
+    {
+     "dari": "REAL10Y",
+     "ke": "XAUUSD",
+     "tanda": -1,
+     "aset": [
+      "XAUUSD"
+     ]
+    },
+    {
+     "dari": "DXY",
+     "ke": "XAUUSD",
+     "tanda": -1,
+     "aset": [
+      "XAUUSD"
+     ]
+    },
+    {
+     "dari": "DXY",
+     "ke": "EURUSD",
+     "tanda": -1,
+     "aset": [
+      "EURUSD"
+     ]
+    },
+    {
+     "dari": "US10Y",
+     "ke": "USDJPY",
+     "tanda": 1,
+     "aset": [
+      "USDJPY"
+     ]
+    },
+    {
+     "dari": "DXY",
+     "ke": "WTI",
+     "tanda": -1,
+     "aset": [
+      "WTI"
+     ]
+    },
+    {
+     "dari": "COPPER",
+     "ke": "WTI",
+     "tanda": 1,
+     "aset": [
+      "WTI"
+     ]
+    },
+    {
+     "dari": "VIX",
+     "ke": "SPX",
+     "tanda": -1,
+     "aset": [
+      "SPX"
+     ]
+    },
+    {
+     "dari": "HYOAS",
+     "ke": "SPX",
+     "tanda": -1,
+     "aset": [
+      "SPX"
+     ]
+    },
+    {
+     "dari": "REAL10Y",
+     "ke": "SPX",
+     "tanda": -1,
+     "aset": [
+      "SPX"
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "keterangan": "Gerbang data per aset. 'umum' menutup semua aset; 'aset' hanya menutup aset itu. Setiap seri kunci di registry wajib ada di sini.",
+ "umum": [
+  "US02Y",
+  "US10Y",
+  "FED",
+  "VIX",
+  "HYOAS"
+ ],
+ "aset": {
+  "XAUUSD": [
+   "XAUUSD"
+  ],
+  "WTI": [
+   "WTI"
+  ],
+  "SPX": [
+   "SPX"
+  ],
+  "USDJPY": [
+   "USDJPY"
+  ],
+  "EURUSD": [
+   "EURUSD"
+  ]
+ }
+}
