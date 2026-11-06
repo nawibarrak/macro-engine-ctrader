@@ -72,13 +72,17 @@ const COMPARE_SYMBOLS = [
 
 const formatPrice = (value: number | null | undefined, digits = 5) => {
   if (value == null || !Number.isFinite(value)) return '–';
-  return value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 };
 
 const formatTime = (value?: string | null) => {
   if (!value) return 'Timestamp tidak tersedia';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Timestamp tidak valid' : `${date.toISOString().replace('T', ' ').slice(0, 19)} UTC`;
+  if (Number.isNaN(date.getTime())) return 'Timestamp tidak valid';
+  return `${date.toISOString().replace('T', ' ').slice(0, 19)} UTC`;
 };
 
 export const App: React.FC = () => {
@@ -145,55 +149,65 @@ export const App: React.FC = () => {
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     const now = Date.now();
+
     try {
       const r = await fetch(`data/bundle.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.series && Object.keys(data.series).length > 0) setBundle(data);
+        if (data && data.series && Object.keys(data.series).length > 0) {
+          setBundle(data);
+        }
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/status.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.counts) setStatus(data);
+        if (data && data.counts) setStatus(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/audit_series.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.checks) setAudit(data);
+        if (data && data.checks) setAudit(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/gates.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.umum) setGates(data);
+        if (data && data.umum) setGates(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/pipeline.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.steps) setPipeline(data);
+        if (data && data.steps) setPipeline(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/concept_check.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.violations) setConceptCheck(data);
+        if (data && data.violations) setConceptCheck(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/feed.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.generated) setFeed(data);
+        if (data && data.generated) setFeed(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/consensus.csv?t=${now}`);
       if (r.ok) {
@@ -202,26 +216,34 @@ export const App: React.FC = () => {
           .split('\n')
           .map((line) => line.split(',').map((x) => x.trim()))
           .filter((parts) => /^20\d\d-\d\d-\d\d$/.test(parts[0]) && parts.length >= 3)
-          .map((parts) => ({ date: parts[0], ind: parts[1], cons: parseFloat(parts[2]) }))
+          .map((parts) => ({
+            date: parts[0],
+            ind: parts[1],
+            cons: parseFloat(parts[2]),
+          }))
           .filter((item) => !isNaN(item.cons));
         if (items.length) setConsensus(items);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/betas.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.assets) setBetas(data);
+        if (data && data.assets) setBetas(data);
       }
     } catch (e) {}
+
     try {
       const r = await fetch(`data/phase.json?t=${now}`);
       if (r.ok) setPhase(await r.json());
     } catch (e) {}
+
     try {
       const r = await fetch(`data/otak.json?t=${now}`);
       if (r.ok) setOtak(await r.json());
     } catch (e) {}
+
     setIsRefreshing(false);
   }, []);
 
@@ -328,3 +350,411 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
