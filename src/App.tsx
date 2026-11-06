@@ -22,6 +22,65 @@ import { DeskView } from './components/DeskView';
 import { LanjutanView } from './components/LanjutanView';
 import { MacroSearchModal } from './components/MacroSearchModal';
 
+type CompareSnapshot = {
+  symbol: string;
+  label: string;
+  updatedAt: string;
+  yfinance?: {
+    source: string;
+    symbol: string;
+    label: string;
+    price: number | null;
+    priceType: string;
+    currency: string | null;
+    exchangeName: string | null;
+    timestamp: string | null;
+    fetchedAt: string;
+  };
+  ctrader?: {
+    source: string;
+    configured: boolean;
+    connected: boolean;
+    host: string;
+    mode: string;
+    bid: number | null;
+    ask: number | null;
+    mid: number | null;
+    timestamp: string | null;
+    priceType: string;
+    note: string;
+  };
+  comparison?: {
+    difference: number | null;
+    differencePercent: number | null;
+    comparable: boolean;
+    note: string;
+  };
+  message?: string;
+  error?: string;
+};
+
+const COMPARE_SYMBOLS = [
+  { key: 'EURUSD', label: 'EUR/USD' },
+  { key: 'USDJPY', label: 'USD/JPY' },
+  { key: 'XAUUSD', label: 'Gold (Yahoo GC=F)' },
+  { key: 'WTI', label: 'WTI (Yahoo CL=F)' },
+  { key: 'SPX', label: 'S&P 500' },
+  { key: 'BTC', label: 'Bitcoin / USD' },
+  { key: 'USDIDR', label: 'USD/IDR' },
+];
+
+const formatPrice = (value: number | null | undefined, digits = 5) => {
+  if (value == null || !Number.isFinite(value)) return '–';
+  return value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
+
+const formatTime = (value?: string | null) => {
+  if (!value) return 'Timestamp tidak tersedia';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Timestamp tidak valid' : `${date.toISOString().replace('T', ' ').slice(0, 19)} UTC`;
+};
+
 export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'desk' | 'lanjutan'>('desk');
   const [isMacroSearchOpen, setIsMacroSearchOpen] = useState(false);
@@ -36,117 +95,105 @@ export const App: React.FC = () => {
   const [betas, setBetas] = useState<BetasData | null>(null);
   const [phase, setPhase] = useState<any | null>(null);
   const [otak, setOtak] = useState<any | null>(null);
-  const [sourceCompare, setSourceCompare] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Live ticking clock for quantitative terminal
-  const [clock, setClock] = useState<string>('');
+  const [clock, setClock] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [compareSymbol, setCompareSymbol] = useState('EURUSD');
+  const [compareSnapshot, setCompareSnapshot] = useState<CompareSnapshot | null>(null);
+  const [compareError, setCompareError] = useState('');
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareUpdatedAt, setCompareUpdatedAt] = useState<string | null>(null);
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const utc = now.toISOString().slice(11, 19) + ' UTC';
-      setClock(utc);
-    };
+    const updateTime = () => setClock(new Date().toISOString().slice(11, 19) + ' UTC');
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Theme management with dark mode default
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  const loadSourceCompare = useCallback(async (symbol: string, signal?: AbortSignal) => {
+    setCompareLoading(true);
+    setCompareError('');
+    try {
+      const response = await fetch(`/api/source-compare?symbol=${encodeURIComponent(symbol)}`, { signal });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || `Permintaan gagal (${response.status})`);
+      setCompareSnapshot(data);
+      setCompareUpdatedAt(new Date().toISOString());
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') setCompareError(error?.message || 'Gagal memuat perbandingan sumber.');
+    } finally {
+      if (!signal?.aborted) setCompareLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    const loadSourceCompare = async () => {
-      try {
-        const r = await fetch('/api/source-compare?symbol=EURUSD');
-        if (!r.ok) return;
-        const data = await r.json();
-        if (active) setSourceCompare(data);
-      } catch (e) {
-        // Intentionally ignored; frontend continues to render existing data.
-      }
-    };
+    const controller = new AbortController();
+    loadSourceCompare(compareSymbol, controller.signal);
+    return () => controller.abort();
+  }, [compareSymbol, loadSourceCompare]);
 
-    loadSourceCompare();
-    const interval = setInterval(loadSourceCompare, 60000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
+  useEffect(() => {
+    const interval = setInterval(() => loadSourceCompare(compareSymbol), 60000);
+    return () => clearInterval(interval);
+  }, [compareSymbol, loadSourceCompare]);
 
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     const now = Date.now();
-
     try {
       const r = await fetch(`data/bundle.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.series && Object.keys(data.series).length > 0) {
-          setBundle(data);
-        }
+        if (data?.series && Object.keys(data.series).length > 0) setBundle(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/status.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.counts) setStatus(data);
+        if (data?.counts) setStatus(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/audit_series.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.checks) setAudit(data);
+        if (data?.checks) setAudit(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/gates.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.umum) setGates(data);
+        if (data?.umum) setGates(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/pipeline.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.steps) setPipeline(data);
+        if (data?.steps) setPipeline(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/concept_check.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.violations) setConceptCheck(data);
+        if (data?.violations) setConceptCheck(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/feed.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.generated) setFeed(data);
+        if (data?.generated) setFeed(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/consensus.csv?t=${now}`);
       if (r.ok) {
@@ -155,34 +202,26 @@ export const App: React.FC = () => {
           .split('\n')
           .map((line) => line.split(',').map((x) => x.trim()))
           .filter((parts) => /^20\d\d-\d\d-\d\d$/.test(parts[0]) && parts.length >= 3)
-          .map((parts) => ({
-            date: parts[0],
-            ind: parts[1],
-            cons: parseFloat(parts[2]),
-          }))
+          .map((parts) => ({ date: parts[0], ind: parts[1], cons: parseFloat(parts[2]) }))
           .filter((item) => !isNaN(item.cons));
         if (items.length) setConsensus(items);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/betas.json?t=${now}`);
       if (r.ok) {
         const data = await r.json();
-        if (data && data.assets) setBetas(data);
+        if (data?.assets) setBetas(data);
       }
     } catch (e) {}
-
     try {
       const r = await fetch(`data/phase.json?t=${now}`);
       if (r.ok) setPhase(await r.json());
     } catch (e) {}
-
     try {
       const r = await fetch(`data/otak.json?t=${now}`);
       if (r.ok) setOtak(await r.json());
     } catch (e) {}
-
     setIsRefreshing(false);
   }, []);
 
@@ -192,235 +231,100 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  const yfinance = sourceCompare?.yfinance;
-  const ctrader = sourceCompare?.ctrader;
-  const updatedAt = sourceCompare?.updatedAt ? new Date(sourceCompare.updatedAt) : null;
-
-  const fmt = (value: number | null | undefined, digits = 5) => {
-    if (value == null || Number.isNaN(value)) return '–';
-    return Number(value).toLocaleString('en-US', {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    });
-  };
+  const yfinance = compareSnapshot?.yfinance;
+  const ctrader = compareSnapshot?.ctrader;
+  const comparison = compareSnapshot?.comparison;
+  const priceDigits = compareSymbol === 'EURUSD' ? 5 : compareSymbol === 'USDJPY' ? 3 : 2;
+  const yahooAgeMs = yfinance?.timestamp ? Math.max(0, Date.now() - Date.parse(yfinance.timestamp)) : null;
+  const yahooStatus = yahooAgeMs == null ? 'Timestamp unavailable' : yahooAgeMs > 5 * 60 * 1000 ? 'Stale (>5 min)' : 'Recent (≤5 min)';
+  const deltaAvailable = Boolean(comparison?.comparable && comparison.difference != null);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Institutional Quantitative Terminal Top Bar */}
       <header className="top">
         <div className="wrap">
-          {/* Left Zone: Terminal Brand & Live Status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="terminal-brand">
-              <span className="terminal-logo-box">QT</span>
-              <span>MACRO ENGINE // QUANT DESK</span>
-            </div>
-
-            <span className="ping-indicator">
-              <span className="ping-dot" />
-              {status?.generated ? `DATA ${Math.max(0, Math.round((Date.now() - Date.parse(status.generated)) / 60000))} MNT` : 'DATA –'}
-            </span>
+            <div className="terminal-brand"><span className="terminal-logo-box">QT</span><span>MACRO ENGINE // QUANT DESK</span></div>
+            <span className="ping-indicator"><span className="ping-dot" />{status?.generated ? `DATA ${Math.max(0, Math.round((Date.now() - Date.parse(status.generated)) / 60000))} MNT` : 'DATA –'}</span>
           </div>
-
-          {/* Center Zone: Quick-Toggle Module Controls */}
           <nav aria-label="Navigasi Terminal">
             {currentView === 'desk' ? (
               <>
-                <a href="#pasar" className="active">Pasar</a>
-                <a href="#aliran">Aliran Modal</a>
-                <a href="#makro">Makro</a>
-                <a href="#kebijakan">Kebijakan</a>
-                <a href="#stres">Stres & Likuiditas</a>
-                <a href="#otak">Otak Makro</a>
-                <a href="#posisi">COT</a>
-                <a href="#kalender">Kalender</a>
-                <a href="#data">Kesehatan</a>
-                <button
-                  type="button"
-                  style={{
-                    fontFamily: 'var(--f-mono)',
-                    fontSize: 11,
-                    background: 'var(--accent-soft)',
-                    borderColor: 'var(--accent-border)',
-                    color: 'var(--accent)',
-                    fontWeight: 600,
-                  }}
-                  onClick={() => {
-                    setCurrentView('lanjutan');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                >
-                  Workbench Sinyal →
-                </button>
+                <a href="#pasar" className="active">Pasar</a><a href="#aliran">Aliran Modal</a><a href="#makro">Makro</a><a href="#kebijakan">Kebijakan</a><a href="#stres">Stres & Likuiditas</a><a href="#otak">Otak Makro</a><a href="#posisi">COT</a><a href="#kalender">Kalender</a><a href="#data">Kesehatan</a>
+                <button type="button" onClick={() => { setCurrentView('lanjutan'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Workbench Sinyal →</button>
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  style={{
-                    fontFamily: 'var(--f-mono)',
-                    fontSize: 11,
-                    background: 'var(--panel2)',
-                    borderColor: 'var(--line-strong)',
-                  }}
-                  onClick={() => {
-                    setCurrentView('desk');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                >
-                  ← Beranda Terminal
-                </button>
-                <span className="small mute" style={{ fontFamily: 'var(--f-mono)', padding: '4px 8px' }}>
-                  [MODULE: QUANTITATIVE WORKBENCH & SIGNAL MODEL]
-                </span>
+                <button type="button" onClick={() => { setCurrentView('desk'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>← Beranda Terminal</button>
+                <span className="small mute" style={{ fontFamily: 'var(--f-mono)', padding: '4px 8px' }}>[MODULE: QUANTITATIVE WORKBENCH & SIGNAL MODEL]</span>
               </>
             )}
           </nav>
-
-          {/* Right Zone: System Clock & Action Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="terminal-time">{clock}</span>
-
-            <button
-              type="button"
-              className="btn sm"
-              style={{
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                borderColor: 'var(--accent-border)',
-                color: 'var(--accent)',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-              onClick={() => setIsMacroSearchOpen(true)}
-              title="Riset Intel Makro Real-Time dengan Google Search Grounding"
-            >
-              <span>⚡</span> INTEL SEARCH
-            </button>
-
-            <button
-              type="button"
-              className="btn sm"
-              onClick={loadData}
-              disabled={isRefreshing}
-              title="Refresh live feeds"
-            >
-              {isRefreshing ? 'SYNCING…' : 'SYNC'}
-            </button>
-
-            <button
-              type="button"
-              className="btn sm"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              title="Toggle Dark / Light Theme"
-            >
-              {theme === 'dark' ? '☀' : '🌙'}
-            </button>
+            <button type="button" className="btn sm" onClick={() => setIsMacroSearchOpen(true)}>⚡ INTEL SEARCH</button>
+            <button type="button" className="btn sm" onClick={loadData} disabled={isRefreshing}>{isRefreshing ? 'SYNCING…' : 'SYNC'}</button>
+            <button type="button" className="btn sm" onClick={() => setTheme((prev) => prev === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">{theme === 'dark' ? '☀' : '🌙'}</button>
           </div>
         </div>
       </header>
 
-      <div style={{ padding: '16px 20px 0' }}>
-        <div
-          style={{
-            border: '1px solid var(--line-strong)',
-            background: 'var(--panel2)',
-            borderRadius: 14,
-            padding: 16,
-            boxShadow: '0 10px 22px rgba(16, 24, 40, 0.12)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--muted)' }}>
-                Source Compare
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>EURUSD</div>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-              {updatedAt ? `Updated ${updatedAt.toISOString().slice(11, 19)} UTC` : 'Waiting for snapshot'}
-            </div>
+      <section aria-labelledby="compare-title" style={{ margin: '16px 20px 0', border: '1px solid var(--line-strong)', background: 'var(--panel2)', borderRadius: 14, padding: 16, boxShadow: '0 10px 22px rgba(16, 24, 40, 0.12)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--muted)' }}>Multi-source market data</div>
+            <h2 id="compare-title" style={{ margin: '3px 0 0', fontSize: 20 }}>Source Compare · {compareSnapshot?.label || COMPARE_SYMBOLS.find((s) => s.key === compareSymbol)?.label}</h2>
           </div>
-
-          {sourceCompare ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-              <div style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.1 }}>
-                  Yahoo Finance
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>{fmt(yfinance?.lastPrice, 5)}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                  {yfinance?.timestamp ? new Date(yfinance.timestamp).toISOString().slice(11, 19) + ' UTC' : '–'}
-                </div>
-              </div>
-
-              <div style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.1 }}>
-                  cTrader
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>
-                  {ctrader?.configured ? 'Live config ready' : 'Not configured'}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                  {ctrader?.host ? `Host: ${ctrader.host}` : 'Host: demo'}
-                </div>
-              </div>
-
-              <div style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.1 }}>
-                  Status
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 8, color: ctrader?.configured ? 'var(--good)' : 'var(--warn)' }}>
-                  {ctrader?.configured ? 'Ready' : 'Pending credentials'}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                  {sourceCompare.message}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading source comparison…</div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <label htmlFor="compare-symbol" className="small">Instrumen</label>
+            <select id="compare-symbol" value={compareSymbol} onChange={(event) => setCompareSymbol(event.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line-strong)', background: 'var(--panel)', color: 'var(--ink)' }}>
+              {COMPARE_SYMBOLS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <button type="button" className="btn sm" onClick={() => loadSourceCompare(compareSymbol)} disabled={compareLoading}>{compareLoading ? 'LOADING…' : 'REFRESH COMPARE'}</button>
+          </div>
         </div>
-      </div>
 
-      {/* Main View Area */}
+        {compareError ? <div role="alert" className="note" style={{ borderColor: 'var(--bad)', marginBottom: 12 }}>Gagal memuat sumber: {compareError}</div> : null}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <article style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 14, minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}><b>Yahoo Finance</b><span className="chip">{yahooStatus}</span></div>
+            <div style={{ fontSize: 25, fontWeight: 700, marginTop: 12 }}>{formatPrice(yfinance?.price, priceDigits)}{yfinance?.currency ? ` ${yfinance.currency}` : ''}</div>
+            <div className="small mute" style={{ marginTop: 6 }}>Ticker: {yfinance?.symbol || '–'} · {yfinance?.priceType || 'menunggu data'}</div>
+            <div className="small mute">Exchange: {yfinance?.exchangeName || '–'}</div>
+            <div className="small mute" style={{ marginTop: 6 }}>Observasi: {formatTime(yfinance?.timestamp)}</div>
+            <div className="small mute">Diambil: {formatTime(yfinance?.fetchedAt)}</div>
+          </article>
+
+          <article style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 14, minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}><b>cTrader</b><span className="chip">{ctrader?.connected ? 'CONNECTED' : 'NOT CONNECTED'}</span></div>
+            <div style={{ fontSize: 25, fontWeight: 700, marginTop: 12 }}>{ctrader?.connected ? `Bid ${formatPrice(ctrader.bid, priceDigits)} / Ask ${formatPrice(ctrader.ask, priceDigits)}` : 'Quote belum tersedia'}</div>
+            <div className="small mute" style={{ marginTop: 6 }}>Symbol: {compareSymbol} · jenis: {ctrader?.priceType || 'bid/ask spot quote'}</div>
+            <div className="small mute">Mode: {ctrader?.mode || 'belum diketahui'} · host: {ctrader?.host || '–'}</div>
+            <div className="small mute" style={{ marginTop: 6 }}>Observasi: {formatTime(ctrader?.timestamp)}</div>
+            <div className="small mute">{ctrader?.note || 'Stream cTrader belum tersambung.'}</div>
+          </article>
+
+          <article style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 14, minWidth: 0 }}>
+            <b>Selisih (cTrader mid − Yahoo)</b>
+            <div style={{ fontSize: 25, fontWeight: 700, marginTop: 12, color: deltaAvailable ? 'var(--ink)' : 'var(--muted)' }}>{deltaAvailable ? formatPrice(comparison?.difference, priceDigits) : 'Belum dapat dibandingkan'}</div>
+            <div className="small mute" style={{ marginTop: 6 }}>Selisih %: {deltaAvailable && comparison?.differencePercent != null ? `${comparison.differencePercent >= 0 ? '+' : ''}${comparison.differencePercent.toFixed(5)}%` : '–'}</div>
+            <div className="small mute" style={{ marginTop: 6 }}>{comparison?.note || 'Nilai selisih hanya dihitung jika quote aktual dari kedua sumber tersedia.'}</div>
+          </article>
+        </div>
+        <div className="small mute" style={{ marginTop: 12 }}>
+          Pembaruan panel: {formatTime(compareUpdatedAt)} · refresh otomatis tiap 60 detik. Yahoo Finance dapat tertunda; selisih tidak ditampilkan tanpa quote cTrader aktual. Harga GC=F/CL=F adalah futures, bukan spot XAUUSD/WTI.
+        </div>
+      </section>
+
       <div style={{ flex: 1 }}>
         {currentView === 'desk' ? (
-          <DeskView
-            bundle={bundle}
-            status={status}
-            audit={audit}
-            gates={gates}
-            pipeline={pipeline}
-            conceptCheck={conceptCheck}
-            feed={feed}
-            consensus={consensus}
-            phase={phase}
-            otak={otak}
-            onNavigateToLanjutan={() => {
-              setCurrentView('lanjutan');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
+          <DeskView bundle={bundle} status={status} audit={audit} gates={gates} pipeline={pipeline} conceptCheck={conceptCheck} feed={feed} consensus={consensus} phase={phase} otak={otak} onNavigateToLanjutan={() => { setCurrentView('lanjutan'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
         ) : (
-          <LanjutanView
-            betasData={betas}
-            onBackToDesk={() => {
-              setCurrentView('desk');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
+          <LanjutanView betasData={betas} onBackToDesk={() => { setCurrentView('desk'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
         )}
       </div>
-
-      {/* Google Search Grounded Macro Intel Modal */}
-      <MacroSearchModal
-        isOpen={isMacroSearchOpen}
-        onClose={() => setIsMacroSearchOpen(false)}
-      />
+      <MacroSearchModal isOpen={isMacroSearchOpen} onClose={() => setIsMacroSearchOpen(false)} />
     </div>
   );
 };
