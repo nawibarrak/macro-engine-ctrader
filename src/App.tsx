@@ -36,6 +36,7 @@ export const App: React.FC = () => {
   const [betas, setBetas] = useState<BetasData | null>(null);
   const [phase, setPhase] = useState<any | null>(null);
   const [otak, setOtak] = useState<any | null>(null);
+  const [sourceCompare, setSourceCompare] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Live ticking clock for quantitative terminal
@@ -62,6 +63,27 @@ export const App: React.FC = () => {
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
+
+  useEffect(() => {
+    let active = true;
+    const loadSourceCompare = async () => {
+      try {
+        const r = await fetch('/api/source-compare?symbol=EURUSD');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (active) setSourceCompare(data);
+      } catch (e) {
+        // Intentionally ignored; frontend continues to render existing data.
+      }
+    };
+
+    loadSourceCompare();
+    const interval = setInterval(loadSourceCompare, 60000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
@@ -169,6 +191,18 @@ export const App: React.FC = () => {
     const interval = setInterval(loadData, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  const yfinance = sourceCompare?.yfinance;
+  const ctrader = sourceCompare?.ctrader;
+  const updatedAt = sourceCompare?.updatedAt ? new Date(sourceCompare.updatedAt) : null;
+
+  const fmt = (value: number | null | undefined, digits = 5) => {
+    if (value == null || Number.isNaN(value)) return '–';
+    return Number(value).toLocaleString('en-US', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -287,6 +321,70 @@ export const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      <div style={{ padding: '16px 20px 0' }}>
+        <div
+          style={{
+            border: '1px solid var(--line-strong)',
+            background: 'var(--panel2)',
+            borderRadius: 14,
+            padding: 16,
+            boxShadow: '0 10px 22px rgba(16, 24, 40, 0.12)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--muted)' }}>
+                Source Compare
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>EURUSD</div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {updatedAt ? `Updated ${updatedAt.toISOString().slice(11, 19)} UTC` : 'Waiting for snapshot'}
+            </div>
+          </div>
+
+          {sourceCompare ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+              <div style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.1 }}>
+                  Yahoo Finance
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>{fmt(yfinance?.lastPrice, 5)}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                  {yfinance?.timestamp ? new Date(yfinance.timestamp).toISOString().slice(11, 19) + ' UTC' : '–'}
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.1 }}>
+                  cTrader
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>
+                  {ctrader?.configured ? 'Live config ready' : 'Not configured'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                  {ctrader?.host ? `Host: ${ctrader.host}` : 'Host: demo'}
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid var(--line-strong)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.1 }}>
+                  Status
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 8, color: ctrader?.configured ? 'var(--good)' : 'var(--warn)' }}>
+                  {ctrader?.configured ? 'Ready' : 'Pending credentials'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                  {sourceCompare.message}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading source comparison…</div>
+          )}
+        </div>
+      </div>
 
       {/* Main View Area */}
       <div style={{ flex: 1 }}>
