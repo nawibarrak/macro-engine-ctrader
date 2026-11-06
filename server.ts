@@ -9,119 +9,128 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-const SYMBOL_MAP: Record<string, string> = {
-  EURUSD: 'EURUSD=X',
-  USDJPY: 'JPY=X',
-  XAUUSD: 'GC=F',
-  GOLD: 'GC=F',
-  WTI: 'CL=F',
-  CRUDE: 'CL=F',
-  SPX500: '^GSPC',
-  SPX: '^GSPC',
-  BTC: 'BTC-USD',
-  BITCOIN: 'BTC-USD',
-  USDIDR: 'IDR=X',
+const SYMBOLS: Record<string, { yahoo: string; label: string; decimals: number }> = {
+  EURUSD: { yahoo: 'EURUSD=X', label: 'EUR/USD', decimals: 5 },
+  USDJPY: { yahoo: 'JPY=X', label: 'USD/JPY', decimals: 3 },
+  XAUUSD: { yahoo: 'GC=F', label: 'Gold futures (GC=F)', decimals: 2 },
+  WTI: { yahoo: 'CL=F', label: 'WTI futures (CL=F)', decimals: 2 },
+  SPX: { yahoo: '^GSPC', label: 'S&P 500 index', decimals: 2 },
+  BTC: { yahoo: 'BTC-USD', label: 'Bitcoin / USD', decimals: 2 },
+  USDIDR: { yahoo: 'IDR=X', label: 'USD/IDR', decimals: 2 },
 };
 
-async function fetchYahooSnapshot(symbol: string) {
-  const ticker = SYMBOL_MAP[symbol.toUpperCase()] || symbol.toUpperCase();
-  const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-      Accept: 'application/json',
-    },
-  });
+async function fetchYahooSnapshot(key: string) {
+  const instrument = SYMBOLS[key];
+  const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(instrument.yahoo)}`);
+  url.searchParams.set('interval', '1m');
+  url.searchParams.set('range', '1d');
 
-  if (!response.ok) {
-    throw new Error(`Yahoo Finance request failed for ${ticker}: ${response.status}`);
-  }
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error(`Yahoo Finance request failed: ${response.status}`);
 
   const data = (await response.json()) as any;
   const result = data?.chart?.result?.[0];
-  if (!result) {
-    throw new Error(`No Yahoo Finance data returned for ${ticker}.`);
-  }
+  if (!result) throw new Error(`No Yahoo Finance data returned for ${instrument.yahoo}.`);
 
   const meta = result.meta || {};
-  const timestamps = result.timestamp || [];
-  const close = result.indicators?.quote?.[0]?.close || [];
-  const latestIndex = timestamps.length - 1;
-  const lastTs = timestamps[latestIndex];
-  const lastClose = close[latestIndex];
+  const timestamps: number[] = result.timestamp || [];
+  const closes: Array<number | null> = result.indicators?.quote?.[0]?.close || [];
+  let latestIndex = -1;
+  for (let i = closes.length - 1; i >= 0; i--) {
+    if (typeof closes[i] === 'number' && Number.isFinite(closes[i])) {
+      latestIndex = i;
+      break;
+    }
+  }
+  const chartPrice = latestIndex >= 0 ? closes[latestIndex] : null;
+  const price = typeof chartPrice === 'number' ? chartPrice : (meta.regularMarketPrice ?? null);
+  const timestamp = latestIndex >= 0 && timestamps[latestIndex]
+    ? new Date(timestamps[latestIndex] * 1000).toISOString()
+    : meta.regularMarketTime
+      ? new Date(meta.regularMarketTime * 1000).toISOString()
+      : null;
 
   return {
-    symbol: ticker,
     source: 'Yahoo Finance',
-    lastPrice: typeof lastClose === 'number' ? lastClose : meta.regularMarketPrice ?? null,
-    previousClose: meta.previousClose ?? null,
-    regularMarketPrice: meta.regularMarketPrice ?? null,
+    symbol: instrument.yahoo,
+    label: instrument.label,
+    price,
+    priceType: chartPrice == null ? 'regularMarketPrice (provider snapshot)' : '1-minute candle close',
     currency: meta.currency ?? null,
     exchangeName: meta.exchangeName ?? null,
-    timestamp: lastTs ? new Date(lastTs * 1000).toISOString() : new Date().toISOString(),
-    isLive: true,
+    timestamp,
+    fetchedAt: new Date().toISOString(),
   };
 }
 
 function getCTraderConfigStatus() {
-  const hasClientId = Boolean(process.env.CTRADER_CLIENT_ID);
-  const hasClientSecret = Boolean(process.env.CTRADER_CLIENT_SECRET);
-  const hasAccessToken = Boolean(process.env.CTRADER_ACCESS_TOKEN);
-  const hasAccountId = Boolean(process.env.CTRADER_ACCOUNT_ID);
-  const host = process.env.CTRADER_HOST || 'demo';
-
-  const configured = hasClientId && hasClientSecret && hasAccessToken && hasAccountId;
-
+  const configured = Boolean(
+    process.env.CTRADER_CLIENT_ID &&
+    process.env.CTRADER_CLIENT_SECRET &&
+    process.env.CTRADER_ACCESS_TOKEN &&
+    process.env.CTRADER_ACCOUNT_ID
+  );
+  const host = (process.env.CTRADER_HOST || 'demo').trim().toLowerCase();
   return {
     source: 'cTrader',
     configured,
+    connected: false,
     host,
     mode: host === 'live' ? 'live' : 'demo',
-    requiresBackendSecret: true,
+    bid: null,
+    ask: null,
+    mid: null,
+    timestamp: null,
+    priceType: 'bid/ask spot quote',
     note: configured
-      ? 'Configured in backend env; market snapshot still requires active OAuth stream and account access.'
-      : 'Not configured in backend env. Set CTRADER_CLIENT_ID, CTRADER_CLIENT_SECRET, CTRADER_ACCESS_TOKEN, and CTRADER_ACCOUNT_ID to enable cTrader comparison.',
+      ? 'Credentials are present, but this app has not connected the cTrader quote stream yet.'
+      : 'Not configured. cTrader quote stream is not connected.',
   };
 }
 
-// Initialize GoogleGenAI
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 app.get('/api/source-compare', async (req, res) => {
+  const requested = String(req.query.symbol || 'EURUSD').toUpperCase();
+  if (!Object.hasOwn(SYMBOLS, requested)) {
+    res.status(400).json({ error: 'Unsupported symbol. Choose EURUSD, USDJPY, XAUUSD, WTI, SPX, BTC, or USDIDR.' });
+    return;
+  }
+
   try {
-    const symbol = String(req.query.symbol || 'EURUSD').toUpperCase();
-
-    const yfinance = await fetchYahooSnapshot(symbol);
-    const ctrader = getCTraderConfigStatus();
-
-    const delta = ctrader.configured && typeof yfinance.lastPrice === 'number'
-      ? Number((yfinance.lastPrice - yfinance.lastPrice).toFixed(6))
-      : null;
+    const [yfinance, ctrader] = await Promise.all([
+      fetchYahooSnapshot(requested),
+      Promise.resolve(getCTraderConfigStatus()),
+    ]);
+    const comparable = ctrader.connected && typeof ctrader.mid === 'number' && typeof yfinance.price === 'number';
+    const difference = comparable ? ctrader.mid! - yfinance.price! : null;
 
     res.json({
-      symbol,
+      symbol: requested,
+      label: SYMBOLS[requested].label,
       updatedAt: new Date().toISOString(),
       yfinance,
       ctrader,
-      delta,
-      sources: [
-        { ...yfinance, comparison: 'reference' },
-        { ...ctrader, comparison: 'counterparty' },
-      ],
-      message: ctrader.configured
-        ? 'Both sources are configured; active quote stream still needs to be started from the backend when you want live cTrader bid/ask updates.'
-        : 'Yahoo Finance is available. cTrader is not configured yet; add backend credentials before enabling real cTrader comparison.',
+      comparison: {
+        difference,
+        differencePercent: comparable && yfinance.price !== 0 ? (difference! / yfinance.price!) * 100 : null,
+        comparable,
+        note: comparable
+          ? 'Mid-price difference; source timestamps must be checked before interpreting.'
+          : 'Difference unavailable until both sources return actual price observations.',
+      },
+      message: ctrader.note,
     });
   } catch (error: any) {
     console.error('source-compare error:', error);
-    res.status(500).json({
-      error: error?.message || 'Unable to fetch comparison data',
-      symbol: String(req.query.symbol || 'EURUSD').toUpperCase(),
-    });
+    res.status(502).json({ error: error?.message || 'Unable to fetch Yahoo Finance comparison data', symbol: requested });
   }
 });
 
-// API Route: Real-time Macro Intelligence with Google Search Grounding
 app.post('/api/macro-search', async (req, res) => {
   try {
     const { query } = req.body;
@@ -139,24 +148,12 @@ app.post('/api/macro-search', async (req, res) => {
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
-      contents: `You are an institutional macro research desk analyst at a quantitative hedge fund.
-The user is requesting live, real-time macroeconomic intelligence and verified market context for: "${query}".
-
-Analyze the latest verified updates using Google Search data. Structure your response professionally:
-1. Executive Snapshot & Latest Official Data (actual numbers, dates, revisions)
-2. Central Bank Stance / Market Consensus Impact
-3. Cross-Asset Implications (Equities, US Yields, DXY, Commodities, Gold)
-4. Quantitative Desk Takeaway (Bullish / Neutral / Bearish bias)
-
-Keep the analysis authoritative, dense, precise, and free of fluff.`,
-      config: {
-        tools: [{ googleSearch: {} }],
-      },
+      contents: `You are an institutional macro research desk analyst at a quantitative hedge fund.\nThe user is requesting live, real-time macroeconomic intelligence and verified market context for: "${query}".\n\nAnalyze the latest verified updates using Google Search data. Structure your response professionally:\n1. Executive Snapshot & Latest Official Data (actual numbers, dates, revisions)\n2. Central Bank Stance / Market Consensus Impact\n3. Cross-Asset Implications (Equities, US Yields, DXY, Commodities, Gold)\n4. Quantitative Desk Takeaway (Bullish / Neutral / Bearish bias)\n\nKeep the analysis authoritative, dense, precise, and free of fluff.`,
+      config: { tools: [{ googleSearch: {} }] },
     });
 
     const candidate = response.candidates?.[0];
     const groundingMetadata = candidate?.groundingMetadata;
-
     res.json({
       query,
       analysis: response.text || 'Tidak ada analisis yang dihasilkan.',
@@ -180,28 +177,18 @@ Keep the analysis authoritative, dense, precise, and free of fluff.`,
     } else {
       friendlyMessage = errStr;
     }
-
-    res.status(500).json({
-      error: friendlyMessage,
-    });
+    res.status(500).json({ error: friendlyMessage });
   }
 });
 
-// Mount Vite middleware for dev or serve static files in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     app.use(express.static('dist'));
-    app.get('*', (_req, res) => {
-      res.sendFile('dist/index.html', { root: '.' });
-    });
+    app.get('*', (_req, res) => res.sendFile('dist/index.html', { root: '.' }));
   }
-
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Macro Engine Desk Server running at http://0.0.0.0:${PORT}`);
   });
