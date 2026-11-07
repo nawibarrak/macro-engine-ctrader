@@ -1,0 +1,5 @@
+# Hanya untuk relay cTrader (Codespaces/lokal). TIDAK dipasang di GitHub Actions agar run 30 menit tidak melambat.
+# Bila muncul galat 'Descriptors cannot be created directly', kirim pesannya ke saya.
+ctrader-open-api
+twisted
+python-dotenv

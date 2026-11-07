@@ -1,0 +1,5 @@
+{
+  "_catatan": "id seri -> nama simbol di broker cTrader. Diisi otomatis oleh ctrader/ctrader_probe.py; boleh diisi manual. null = tidak dipakai.",
+  "SPX": null, "NDX": null, "IHSG": null, "NIKKEI": null, "DXY": null, "XAUUSD": null, "WTI": null,
+  "COPPER": null, "BTC": null, "VIX": null, "USDJPY": null, "EURUSD": null, "USDIDR": null
+}
