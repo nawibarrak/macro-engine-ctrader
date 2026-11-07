@@ -4,4 +4,5 @@ pandas
 yfinance
 ctrader-open-api
 twisted
+service_identity<25
 python-dotenv

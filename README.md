@@ -29,11 +29,21 @@ A modern, high-precision macroeconomic terminal and fundamental asset allocation
 
 ```bash
 # Install dependencies
-npm install
+bun install --frozen-lockfile
 
 # Start development server on port 3000
-npm run dev
+bun run dev
 
 # Production build
-npm run build
+bun run build
 ```
+
+## GitHub Actions
+
+- `CI` runs on pushes and pull requests. It builds the frontend and checks Python syntax.
+- `Refresh macro data and publish dashboard` runs every 30 minutes or on demand from the Actions tab. It runs `scripts/pipeline.py`, builds the frontend, includes generated dashboard data, and publishes the result to GitHub Pages.
+- Add `FRED_API_KEY` under **Settings > Secrets and variables > Actions** before running the data workflow.
+- In **Settings > Pages**, choose **GitHub Actions** as the build and deployment source.
+- cTrader remains disabled by default. To opt in, add `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, `CTRADER_ACCESS_TOKEN`, and `CTRADER_ACCOUNT_ID` as Actions secrets, then set the `CTRADER_ENABLED` Actions variable to `1`. The default host is `demo`; do not set `CTRADER_HOST=live` and `CTRADER_ALLOW_LIVE=1` unless live market data is explicitly intended.
+
+The Pages deployment hosts the static dashboard and generated data. The Express routes in `server.ts` (`/api/source-compare` and `/api/macro-search`) require a Node server and are not provided by GitHub Pages.

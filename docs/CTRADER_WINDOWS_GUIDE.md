@@ -3,7 +3,7 @@
 Repo ini adalah salinan terpisah untuk eksperimen sumber data cTrader. **Belum ada trading order**: konektor yang disiapkan hanya menerima quote dan menulis ke staging; pipeline produksi `data/series` dan `scripts/data_layer.py` tidak diubah.
 
 ## Apa yang sudah disiapkan
-- konektor quote cTrader demo menggunakan SDK OpenApiPy dari Spotware
+- konektor quote dan candle historis harian cTrader menggunakan SDK OpenApiPy dari Spotware
 - OAuth helper (langkah token dijelaskan di bawah; token dimasukkan lokal ke `.env`)
 - file staging JSON Lines di `data/ctrader_cache/`
 - backup ZIP dan restore ke folder lain agar tidak menimpa proyek aktif
@@ -12,7 +12,7 @@ Repo ini adalah salinan terpisah untuk eksperimen sumber data cTrader. **Belum a
 ## Penting sebelum mulai
 - Jangan pernah menaruh `CTRADER_CLIENT_SECRET`, access token, atau refresh token di GitHub.
 - Mulai dengan akun DEMO. Live diblokir kecuali Anda secara eksplisit menambahkan `--allow-live`.
-- Output hanya quote staging; belum disambungkan ke model atau data utama.
+- Quote streaming tetap masuk staging. Candle D1 historis dapat dipakai data layer setelah `CTRADER_ENABLED=1` dan audit lokal berhasil.
 - `requirements.txt` mencakup dependensi Python, sedangkan aplikasi web juga membutuhkan Node/Bun seperti sebelumnya.
 
 ## Langkah pertama: backup
@@ -55,11 +55,27 @@ py scripts/run_fetch.py --symbols EURUSD --seconds 60
 
 Bila berhasil, output JSONL muncul di `data/ctrader_cache/`. Periksa bahwa timestamp, bid, ask, dan mid terisi. Jika broker memakai nama berbeda, gunakan nama simbol persis yang tersedia di akun.
 
+## Uji riwayat dan hubungkan ke dashboard
+1. Uji satu candle harian di akun demo:
+
+```powershell
+py scripts/run_fetch.py --history --symbols EURUSD --start 2025-01-01
+```
+
+2. Pastikan perintah mengembalikan titik tanggal-nilai dan tidak gagal autentikasi.
+3. Ubah `CTRADER_ENABLED=1` di `.env`, lalu jalankan pipeline:
+
+```powershell
+py scripts/pipeline.py
+```
+
+Pipeline mencoba cTrader untuk EURUSD, USDJPY, XAUUSD, dan BTC, lalu memakai yfinance/FRED sebagai fallback. Periksa `data/status.json` untuk `prov: "ctrader"` dan `data/bundle.json` untuk seri yang akan ditampilkan web. Bila simbol broker berbeda, sesuaikan kandidat pada `scripts/provider_registry.py`. Host live tetap diblokir kecuali `CTRADER_HOST=live` dan `CTRADER_ALLOW_LIVE=1` diatur secara sengaja.
+
 ## Batasan dan langkah setelah uji
 - Jalur demo perlu diuji di mesin lokal Anda; tidak bisa divalidasi dari GitHub saja.
-- Implementasi hanya menangani spot events; ia tidak meminta historical bars atau melakukan agregasi OHLC.
-- `scripts/provider_registry.py` saat ini hanya mendokumentasikan rute kandidat. Ia belum dipanggil oleh `data_layer.py`.
-- Jangan menyalin staging ke `data/series` sampai skema, timezone, harga bid/ask, gap, dan audit cocok dengan consumer yang ada.
+- Jalur historis menggunakan candle D1 cTrader dan nilai close; data baris yang tersedia bergantung pada broker dan simbol akun.
+- Rute cTrader dinonaktifkan secara default dan hanya menangani empat seri yang dipetakan; seri lain tetap menggunakan provider lama.
+- Validasi koneksi dan kualitas data harus dilakukan pada akun demo sebelum mengaktifkan rute tersebut untuk penggunaan rutin.
 - Jangan gunakan output untuk keputusan trading otomatis; ini adalah konektor data eksperimental.
 
 ## Referensi

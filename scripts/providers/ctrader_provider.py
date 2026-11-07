@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
@@ -27,6 +28,8 @@ try:
         ProtoOAApplicationAuthRes,
         ProtoOAGetAccountListByAccessTokenReq,
         ProtoOAGetAccountListByAccessTokenRes,
+        ProtoOAGetTrendbarsReq,
+        ProtoOAGetTrendbarsRes,
         ProtoOASpotEvent,
         ProtoOASpotsSubscribeReq,
         ProtoOASubscribeSpotsReq,
@@ -38,10 +41,10 @@ except (ImportError, AttributeError):
 
 
 class CTraderProvider:
-    """Demo-first cTrader spot stream writer.
+    """Demo-first cTrader market-data client for spot streaming and historical D1 bars.
 
-    This class only receives market data. It does not place or modify orders, and it writes
-    JSON Lines to a staging directory; it never changes data/series or the production bundle.
+    It does not place or modify orders. Quote streaming writes to staging; historical points
+    are returned to the caller and only enter production through the data layer's checks.
     """
 
     provider_name = "ctrader"
@@ -59,6 +62,11 @@ class CTraderProvider:
         self._out = None
         self._received = 0
         self._failed = False
+        self._history_mode = False
+        self._history_start: Optional[datetime] = None
+        self._history_end: Optional[datetime] = None
+        self._history_points: Dict[str, list[list[Any]]] = {}
+        self._history_pending: set[int] = set()
 
     @staticmethod
     def _need_sdk() -> None:
@@ -110,6 +118,35 @@ class CTraderProvider:
             raise RuntimeError("cTrader stream did not complete successfully; inspect the error printed above.")
         print(f"Finished: received {self._received} quote event(s). Output remains in staging; no engine data was changed.")
         return self._received
+
+    def fetch_daily_series(self, symbol: str, start_date: str, end_date: Optional[str] = None,
+                           allow_live: bool = False) -> list[list[Any]]:
+        self._need_sdk()
+        if not self.client_id or not self.client_secret or not self.access_token:
+            raise RuntimeError("Set CTRADER_CLIENT_ID, CTRADER_CLIENT_SECRET and CTRADER_ACCESS_TOKEN in local .env first.")
+        self._wanted = [symbol.strip()]
+        if not self._wanted[0]:
+            raise RuntimeError("Provide an exact cTrader symbol name.")
+        self._history_start = datetime.strptime(start_date[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end_day = end_date or datetime.now(timezone.utc).date().isoformat()
+        self._history_end = datetime.strptime(end_day[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if self._history_end < self._history_start:
+            raise ValueError("end_date must be on or after start_date")
+
+        from twisted.internet import reactor
+
+        self._history_mode = True
+        self._client = Client(self._host(allow_live), EndPoints.PROTOBUF_PORT, TcpProtocol)
+        self._client.setConnectedCallback(self._on_connected)
+        self._client.setDisconnectedCallback(self._on_disconnected)
+        self._client.setMessageReceivedCallback(self._on_message)
+        self._client.startService()
+        reactor.callLater(45, self._on_history_timeout)
+        print(f"Requesting cTrader D1 history for {symbol} from {start_date}.")
+        reactor.run()
+        if self._failed:
+            raise RuntimeError("cTrader historical request failed or timed out.")
+        return self._history_points.get(symbol, [])
 
     def _send(self, request: Any) -> None:
         deferred = self._client.send(request)
@@ -175,18 +212,70 @@ class CTraderProvider:
                     symbol = by_name[name]
                     sid = int(symbol.symbolId)
                     self._symbols[sid] = {"name": name, "digits": int(getattr(symbol, "digits", 5))}
-                req = ProtoOASubscribeSpotsReq()
-                req.ctidTraderAccountId = self._account_id
-                req.symbolId.extend(self._symbols.keys())
-                req.subscribeToSpotTimestamp = True
-                self._send(req)
-                print(f"Subscribed to {', '.join(self._wanted)}.")
+                if self._history_mode:
+                    self._request_daily_bars()
+                else:
+                    req = ProtoOASubscribeSpotsReq()
+                    req.ctidTraderAccountId = self._account_id
+                    req.symbolId.extend(self._symbols.keys())
+                    req.subscribeToSpotTimestamp = True
+                    self._send(req)
+                    print(f"Subscribed to {', '.join(self._wanted)}.")
+            elif message.payloadType == ProtoOAGetTrendbarsRes().payloadType:
+                self._write_daily_bars(payload)
             elif message.payloadType == ProtoOASpotEvent().payloadType:
                 self._write_spot(payload)
         except Exception as exc:
             self._failed = True
             print(f"Could not process cTrader message: {exc}")
             self._stop()
+
+    def _request_daily_bars(self) -> None:
+        start = self._history_start
+        end = self._history_end
+        if start is None or end is None:
+            raise RuntimeError("Historical date range was not initialized.")
+        days = (end.date() - start.date()).days + 1
+        count = min(10000, max(1, math.ceil(days * 5 / 7) + 32))
+        from_ms = int(start.timestamp() * 1000)
+        to_ms = int((end + timedelta(days=1) - timedelta(milliseconds=1)).timestamp() * 1000)
+        for sid in self._symbols:
+            request = ProtoOAGetTrendbarsReq()
+            request.ctidTraderAccountId = self._account_id
+            request.fromTimestamp = from_ms
+            request.toTimestamp = to_ms
+            request.period = 12  # D1
+            request.symbolId = sid
+            request.count = count
+            self._history_pending.add(sid)
+            self._send(request)
+
+    @staticmethod
+    def trendbar_to_point(bar: Any) -> list[Any]:
+        timestamp = int(bar.utcTimestampInMinutes) * 60
+        day = datetime.fromtimestamp(timestamp, tz=timezone.utc).date().isoformat()
+        close = (int(bar.low) + int(bar.deltaClose)) / 100000
+        return [day, round(close, 8)]
+
+    def _write_daily_bars(self, response: Any) -> None:
+        sid = int(response.symbolId)
+        meta = self._symbols.get(sid)
+        if meta:
+            start = self._history_start.date() if self._history_start else None
+            end = self._history_end.date() if self._history_end else None
+            points = [self.trendbar_to_point(bar) for bar in response.trendbar]
+            self._history_points[meta["name"]] = [
+                point for point in points
+                if (start is None or point[0] >= start.isoformat())
+                and (end is None or point[0] <= end.isoformat())
+            ]
+        self._history_pending.discard(sid)
+        if not self._history_pending:
+            self._stop()
+
+    def _on_history_timeout(self) -> None:
+        self._failed = True
+        self._stop()
 
     def _write_spot(self, event: Any) -> None:
         sid = int(event.symbolId)
