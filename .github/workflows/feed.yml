@@ -2,7 +2,7 @@ name: Refresh macro data and publish dashboard
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 0 * * *" # Ubah dari tiap 30 menit menjadi sekali sehari untuk menghindari konflik tumpang tindih artifact
   workflow_dispatch:
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: macro-data-and-pages
-  cancel-in-progress: false
+  cancel-in-progress: true # Batalkan run lama jika ada trigger baru yang masuk
 
 jobs:
   build:
@@ -60,11 +60,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build frontend
-        run: bun run build # runs TypeScript checks and vite build
+        run: bun run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_id }} # Berikan nama unik berbasis run_id agar tidak bentrok
           path: dist
 
   deploy:
@@ -81,3 +82,5 @@ jobs:
       - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_id }} # Sesuaikan agar mendengarkan artifact unik tersebut
