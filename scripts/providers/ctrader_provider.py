@@ -31,7 +31,7 @@ try:
         ProtoOAGetTrendbarsReq,
         ProtoOAGetTrendbarsRes,
         ProtoOASpotEvent,
-        ProtoOASpotsSubscribeReq,
+        ProtoOASubscribeSpotsReq,
         ProtoOASubscribeSpotsReq,
         ProtoOASymbolsListReq,
         ProtoOASymbolsListRes,

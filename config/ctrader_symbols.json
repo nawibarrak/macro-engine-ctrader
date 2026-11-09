@@ -1,0 +1,16 @@
+{
+  "_catatan": "id seri -> nama simbol di broker cTrader. Diisi otomatis oleh ctrader/ctrader_probe.py; boleh diisi manual. null = tidak dipakai.",
+  "SPX": "US500",
+  "NDX": "NAS100",
+  "IHSG": null,
+  "NIKKEI": "JPN225",
+  "DXY": "USDX",
+  "XAUUSD": "XAUUSD",
+  "WTI": "XTIUSD",
+  "COPPER": "Copper",
+  "BTC": "BTCUSD",
+  "VIX": "VIX",
+  "USDJPY": "USDJPY",
+  "EURUSD": "EURUSD",
+  "USDIDR": "USDIDR"
+}

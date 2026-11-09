@@ -48,13 +48,12 @@ python scripts/backup_restore.py --restore backups/pre-ctrader.zip
 Do not write cTrader data directly into the main `data/series/` directory before a validation pass. Always stage data first, then normalize and promote only after quality checks succeed.
 
 ## Required env vars
-- `CTRTADER_CLIENT_ID`
-- `CTRTADER_CLIENT_SECRET`
-- `CTRTADER_REDIRECT_URI`
-- `CTRTADER_HOST=demo`
-- `CTRTADER_ACCOUNT_ID`
-- `CTRTADER_ACCESS_TOKEN`
-- `CTRTADER_REFRESH_TOKEN`
+- `CTRADER_CLIENT_ID`
+- `CTRADER_CLIENT_SECRET`
+- `CTRADER_ACCESS_TOKEN`
+- `CTRADER_ACCOUNT_ID` (boleh nomor login atau ctid)
+- `CTRADER_HOST=demo`
+- `CTRADER_RELAY_PORT=8787` (opsional)
 
 ## Recommended next steps
 1. install dependencies from `requirements.txt`

@@ -23,3 +23,11 @@ dist/
 .DS_Store
 *.swp
 *.swo
+
+.venv312/
+cache/
+.vscode/
+data/
+.env
+*.csv
+*.parquet

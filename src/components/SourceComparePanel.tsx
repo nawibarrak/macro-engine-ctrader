@@ -52,6 +52,10 @@ export const SourceComparePanel: React.FC = () => {
     setError('');
     try {
       const response = await fetch(`/api/source-compare?symbol=${encodeURIComponent(symbol)}`, { cache: 'no-store' });
+      const ct = response.headers.get('content-type') ?? '';
+      if (!ct.includes('application/json')) {
+        throw new Error('API tidak ditemukan (HTTP ' + response.status + '). Pastikan backend jalan lewat npm run dev.');
+      }
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `Permintaan gagal (${response.status})`);
       setData(result);

@@ -124,6 +124,10 @@ export const App: React.FC = () => {
     setCompareError('');
     try {
       const response = await fetch(`/api/source-compare?symbol=${encodeURIComponent(symbol)}`, { signal });
+      const ct = response.headers.get('content-type') ?? '';
+      if (!ct.includes('application/json')) {
+        throw new Error('API tidak ditemukan (HTTP ' + response.status + '). Pastikan backend jalan lewat npm run dev.');
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || `Permintaan gagal (${response.status})`);
       setCompareSnapshot(data);
