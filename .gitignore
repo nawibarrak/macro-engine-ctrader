@@ -27,7 +27,4 @@ dist/
 .venv312/
 cache/
 .vscode/
-data/
 .env
-*.csv
-*.parquet
