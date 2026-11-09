@@ -1,0 +1,9 @@
+ .env.example                          |  19 [32m+++++[m[31m-----[m
+ docs/CTRADER_INTEGRATION_PLAN.md      |  13 [32m++++[m[31m---[m
+ requirements.txt                      |   4 [31m---[m
+ scripts/providers/__init__.py         |   5 [32m+[m[31m--[m
+ scripts/providers/ctrader_provider.py |   2 [32m+[m[31m-[m
+ server.ts                             | 164 [32m+++++++++++++++++++++[m[31m-----------------------------------------------------------------[m
+ src/App.tsx                           |   4 [32m+++[m
+ src/components/SourceComparePanel.tsx |   4 [32m+++[m
+ 8 files changed, 67 insertions(+), 148 deletions(-)
